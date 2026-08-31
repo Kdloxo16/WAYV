@@ -14,9 +14,9 @@
   <main id="app" class="shell">
     <section id="homeView" class="view active" aria-labelledby="homeTitle">
       <div class="brand-mark"><img src="icon.svg" alt=""></div>
-      <p class="eyebrow">ENCUENTRA A TU TEAM</p>
-      <h1 id="homeTitle">WAYV</h1>
-      <p class="intro">Ubica a tus amigos con dirección, distancia y precisión. Sin mapas complicados.</p>
+      <h1 id="homeTitle" class="sr-only">WAYV</h1>
+      <img class="wordmark" src="wayv-wordmark.svg" alt="WAYV">
+      <p class="intro">Ubica a tus amigos en el RAVE</p>
       <div class="stack">
         <button class="button primary" data-go="createView">Crear un grupo</button>
         <button class="button secondary" data-go="joinView">Unirme a un grupo</button>
@@ -63,6 +63,13 @@
         <div><p id="eventEyebrow" class="eyebrow">EVENTO</p><h2 id="groupTitle">Mi grupo</h2></div>
         <button id="menuButton" class="profile" aria-label="Opciones del grupo">KE</button>
       </header>
+      <section id="invitePanel" class="invite-panel hidden" aria-label="Invitación privada">
+        <div><small>CÓDIGO PRIVADO</small><strong id="groupInviteCode">—</strong></div>
+        <div class="invite-actions">
+          <button id="shareInvite" type="button">Compartir invitación</button>
+          <button id="copyInvite" type="button">Copiar enlace</button>
+        </div>
+      </section>
       <div id="memberChips" class="members" aria-label="Integrantes"></div>
       <section class="radar" aria-label="Dirección hacia integrante seleccionado">
         <span class="north">N ↑</span>

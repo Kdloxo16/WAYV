@@ -8,6 +8,8 @@ $("joinForm").addEventListener("submit",joinGroup);
 $("routeButton").addEventListener("click",toggleRoute);
 $("meetButton").addEventListener("click",createMeetingPoint);
 $("refreshPending").addEventListener("click",loadPending);
+$("shareInvite").addEventListener("click",shareInvitation);
+$("copyInvite").addEventListener("click",copyInvitation);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session?.group_id)loadGroupData();});
 
 initialize();
@@ -65,7 +67,7 @@ function restoreSession(){
 
 async function enterGroup(session){
   $("eventEyebrow").textContent=session.event.toUpperCase();$("groupTitle").textContent="Mi grupo";$("menuButton").textContent=(session.nickname||"YO").slice(0,2).toUpperCase();
-  $("creatorPanel").classList.toggle("hidden",session.role!=="creator");state.session=session;show("groupView");renderMembers();renderEmptyTarget();
+  $("creatorPanel").classList.toggle("hidden",session.role!=="creator");state.session=session;setupInvitation(session);show("groupView");renderMembers();renderEmptyTarget();
   if(session.role==="creator")loadPending();
   if(backend.configured&&session.group_id){
     await loadGroupData();startRealtime(session.group_id);startLocationSharing(session.group_id);
@@ -148,6 +150,19 @@ function updateGuide(){
 }
 
 async function createMeetingPoint(){if(!state.ownLocation){toast("Esperando una ubicación precisa para crear el punto");return;}try{await backend.createMeetingPoint({groupId:state.session.group_id,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude});toast("Punto de encuentro compartido con el grupo");}catch(error){toast(friendlyError(error));}}
+
+function setupInvitation(session){
+  const canInvite=session.role==="creator"&&Boolean(session.invite_code);$("invitePanel").classList.toggle("hidden",!canInvite);
+  if(!canInvite)return;$("groupInviteCode").textContent=session.invite_code;state.inviteUrl=invitationUrl(session.invite_code);
+}
+function invitationUrl(code){const url=new URL(location.href);url.search="";url.hash="";url.searchParams.set("invite",code);return url.toString();}
+async function shareInvitation(){
+  const session=state.session;if(!state.inviteUrl)return;
+  const data={title:`WAYV · ${session.event}`,text:`Únete a mi grupo ${session.event} en WAYV. El creador deberá aprobar tu entrada.`,url:state.inviteUrl};
+  try{if(navigator.share){await navigator.share(data);return;}await copyText(state.inviteUrl);toast("Enlace privado copiado");}catch(error){if(error?.name!=="AbortError")toast("No se pudo compartir la invitación");}
+}
+async function copyInvitation(){if(!state.inviteUrl)return;try{await copyText(state.inviteUrl);toast("Enlace privado copiado");}catch{toast("No se pudo copiar el enlace");}}
+async function copyText(value){if(navigator.clipboard?.writeText)return navigator.clipboard.writeText(value);const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.append(area);area.select();const copied=document.execCommand("copy");area.remove();if(!copied)throw new Error("Copy failed");}
 
 function renderStatus(member){const live=isLive(member.location);$("liveLabel").textContent=live?"Live":"Offline";document.querySelector(".live-dot").classList.toggle("offline",!live);$("updatedLabel").textContent=member.location?live?"Actualizada ahora":`Última ubicación · ${ageLabel(member.location.updatedAt)}`:"Todavía no comparte ubicación";}
 function current(){return state.members.find(member=>member.user_id===state.selected);}

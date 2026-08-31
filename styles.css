@@ -12,7 +12,8 @@ button,input,select{font:inherit}
 .eyebrow{margin:0 0 5px;color:var(--green);font-size:11px;font-weight:800;letter-spacing:.15em}
 h1,h2{margin:0;letter-spacing:-.04em}
 h1{font-size:44px;text-align:center}
-.homeView{}
+.wordmark{display:block;width:min(100%,310px);height:auto;margin:4px auto 6px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .intro{max-width:310px;margin:12px auto 28px;color:var(--muted);font-size:14px;line-height:1.55;text-align:center}
 .stack,.form-stack{display:grid;gap:11px;margin-top:28px}
 .button{width:100%;min-height:48px;border:0;border-radius:14px;font-weight:850;cursor:pointer}
@@ -34,6 +35,9 @@ h1{font-size:44px;text-align:center}
 }
 .topbar{display:flex;align-items:center;justify-content:space-between}
 .profile{width:42px;height:42px;border:0;border-radius:50%;background:var(--blue);color:white;font-weight:900}
+.invite-panel{display:grid;grid-template-columns:auto 1fr;gap:12px;margin-top:16px;padding:13px;border:1px solid rgba(189,255,120,.25);border-radius:14px;background:rgba(189,255,120,.07)}
+.invite-panel>div:first-child{display:grid;align-content:center;gap:3px}.invite-panel small{color:var(--muted);font-size:9px;letter-spacing:.1em}.invite-panel strong{color:var(--green);font-size:17px;letter-spacing:.08em}
+.invite-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.invite-actions button{min-height:39px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);font-size:10px;font-weight:800}
 .members{display:flex;gap:8px;margin:17px 0 12px;overflow-x:auto;scrollbar-width:none}
 .members:empty::after{content:"Aún no hay otros integrantes aprobados";width:100%;padding:10px;color:var(--muted);font-size:12px;text-align:center}
 .chip{min-width:max-content;padding:8px 12px;border:1px solid var(--line);border-radius:99px;background:var(--panel2);color:var(--text);font-size:12px}
@@ -73,3 +77,4 @@ h1{font-size:44px;text-align:center}
 .brand-mark{margin-top:20px}
 .radar{height:260px}
 }
+@media(max-width:370px){.invite-panel{grid-template-columns:1fr}.invite-actions button{font-size:11px}}
