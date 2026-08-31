@@ -1,46 +1,40 @@
-# Find my team — prototipo Awakenings
+# WAYV MVP
 
-Este prototipo demuestra la idea principal de la app:
+Primera base modular de WAYV para ubicar amigos en festivales mediante dirección, distancia y precisión.
 
-- obtiene la ubicación del usuario;
-- calcula la distancia y el rumbo hacia un amigo simulado;
-- usa la brújula real del teléfono cuando está disponible;
-- comparte/actualiza ubicación únicamente mientras la app está visible;
-- al salir, conserva la última ubicación conocida y su antigüedad;
-- puede instalarse en la pantalla de inicio como aplicación web.
-- permite crear un punto de encuentro con el botón **Reunirse aquí**;
-- muestra el punto dentro del plano y una notificación de demostración.
-- simula tres integrantes seleccionables: KIKI, Amelie y Marlon;
-- muestra `Live` en verde y `Offline` en rojo.
-- muestra simultáneamente a los tres integrantes dentro del plano;
-- mantiene la ruta oculta hasta pulsar **Trazar ruta** sobre la persona elegida;
-- usa `#BDFF78` como color principal, `#3892FF` como secundario y `#3E4957` como fondo.
-- incorpora una flecha geométrica modular como logo de la aplicación.
+## Incluido
 
-## Probar en el computador
+- inicio y recuperación de sesión local;
+- creación de grupos con vencimiento en horas o días;
+- ingreso mediante código privado;
+- pantalla de espera y simulación de aprobación;
+- selección de integrantes;
+- flecha direccional e instrucciones de navegación;
+- estados Live/Offline;
+- estructura PWA instalable.
+- sesiones anónimas persistentes mediante Supabase;
+- solicitudes y aprobación real del creador;
+- envío de ubicación en primer plano cada cinco segundos;
+- políticas RLS que restringen los datos a integrantes aprobados.
 
-Abre `index.html`. La ubicación puede requerir un servidor local o HTTPS según el navegador.
+## Ejecutar
 
-## Publicar con GitHub Pages
+La geolocalización y el service worker requieren HTTPS o un servidor local. Desde esta carpeta:
 
-1. Crea un repositorio nuevo en GitHub.
-2. Sube todos los archivos de esta carpeta a la raíz del repositorio.
-3. En GitHub entra en **Settings > Pages**.
-4. En **Build and deployment**, selecciona **Deploy from a branch**.
-5. Selecciona la rama `main`, carpeta `/ (root)` y presiona **Save**.
-6. Espera a que GitHub muestre el enlace público HTTPS.
-7. Abre ese enlace desde Safari en el iPhone.
+```bash
+python3 -m http.server 8080
+```
 
-## Probar en iPhone
+Abre `http://localhost:8080`.
 
-1. Abre el enlace HTTPS en Safari.
-2. Pulsa **Activar ubicación** y autoriza el permiso.
-3. Pulsa **Activar brújula del dispositivo** y autoriza el movimiento/orientación.
-4. Mueve el amigo simulado y gira el teléfono para comprobar la flecha.
-5. Usa **Simular que Felipe cerró la app** para mostrar la regla de última ubicación.
-6. Pulsa **Reunirse aquí** para marcar la posición y probar el aviso.
-7. Para instalarla: **Compartir > Agregar a pantalla de inicio**.
+## Conectar Supabase
 
-## Alcance de esta versión
+1. Crea un proyecto gratuito en Supabase.
+2. Activa `Anonymous Sign-Ins` en Authentication.
+3. Abre SQL Editor y ejecuta `supabase/schema.sql`.
+4. Copia la URL del proyecto y la `Publishable key` en `config.js`.
+5. Sirve la carpeta mediante HTTPS o un servidor local.
 
-La ubicación de Felipe todavía es simulada. La notificación actual demuestra el flujo en el mismo dispositivo. El siguiente paso será conectar una base de datos en tiempo real y un servicio de notificaciones para enviar el punto de encuentro a todos los teléfonos del grupo.
+Nunca pongas una `Secret key` o `service_role` en `config.js`.
+
+Sin configuración, WAYV conserva el modo demostración. Con configuración, la creación, solicitudes, aprobación y sesión usan Supabase.
