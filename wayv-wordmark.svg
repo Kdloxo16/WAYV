@@ -1,18 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 170" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 185" role="img" aria-labelledby="title desc">
   <title id="title">WAYV</title>
-  <desc id="desc">Logotipo geométrico de WAYV con detalles azules y una flecha verde.</desc>
-  <g fill="#F6F7F9">
-    <path d="M18 24h46l43 88 44-88h40l44 88 43-88h46l-83 132h-34l-36-72-36 72h-34z"/>
-    <path fill-rule="evenodd" d="M327 156 407 24h43l80 132h-48l-15-27h-78l-15 27zm82-63h38l-19-35z"/>
-    <path d="m510 24 56 58v74h44V82l56-58h-54l-24 29-24-29z"/>
-    <path d="M628 24h48l42 82 42-82h48l-70 132h-40z" transform="translate(-88 0)"/>
-  </g>
-  <g fill="#3892FF">
-    <path d="M239 24h13l-55 132h-13z"/>
-    <path d="M347 156h-12l79-132h12z"/>
-    <path d="M441 24h13l80 132h-13z"/>
-    <path d="M602 24h13l-34 38-8-8z"/>
-    <path d="M671 24h13l-62 132h-13z"/>
-  </g>
-  <path fill="#BDFF78" d="M665 61 686 95h-13v35h-16V95h-13z"/>
+  <desc id="desc">Logotipo geométrico WAYV con líneas azules y una flecha verde.</desc>
+
+  <!-- W -->
+  <path fill="#F6F7F9" d="M8 24h42l42 101 31-69h34l31 69 42-101h42l-63 137h-39l-30-67-30 67H71z"/>
+  <path fill="#3892FF" d="M200 24h14l-57 137h-14z"/>
+
+  <!-- A -->
+  <path fill="#F6F7F9" fill-rule="evenodd" d="M303 24h42l82 137h-44l-17-30h-84l-17 30h-44zm21 45-24 29h48z"/>
+  <path fill="#3892FF" d="M289 161h-14l70-137h14z"/>
+  <path fill="#3892FF" d="M368 24h14l70 137h-14z"/>
+
+  <!-- Y -->
+  <path fill="#F6F7F9" d="M402 24h47l38 45 38-45h47l-63 79v58h-44v-58z"/>
+  <path fill="#3892FF" d="m525 24 14 0-43 52-9-8z"/>
+
+  <!-- V -->
+  <path fill="#F6F7F9" d="M553 24h46l42 94 42-94h46l-63 137h-50z"/>
+  <path fill="#3892FF" d="M676 24h14l-61 137h-14z"/>
+
+  <!-- Flecha modular -->
+  <path fill="#BDFF78" d="m641 61 27 39h-17v42h-20v-42h-17z"/>
 </svg>
