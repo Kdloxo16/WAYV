@@ -31,7 +31,7 @@ Abre `http://localhost:8080`.
 
 1. Crea un proyecto gratuito en Supabase.
 2. Activa `Anonymous Sign-Ins` en Authentication.
-3. Abre SQL Editor y ejecuta `supabase/schema.sql`.
+3. Abre SQL Editor y ejecuta `schema.sql`.
 4. Copia la URL del proyecto y la `Publishable key` en `config.js`.
 5. Sirve la carpeta mediante HTTPS o un servidor local.
 

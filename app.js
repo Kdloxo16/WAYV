@@ -1,4 +1,4 @@
-import{backend}from"./services/backend.js";
+import{backend}from"./backend.js";
 const $=id=>document.getElementById(id);
 const state={route:false,heading:0,bearing:42,selected:"kiki",live:true,toastTimer:null};
 const members=[{id:"kiki",name:"KIKI",initials:"KI",distance:74,bearing:42,accuracy:8,live:true},{id:"amelie",name:"Amelie",initials:"AM",distance:126,bearing:298,accuracy:15,live:false},{id:"marlon",name:"Marlon",initials:"MA",distance:48,bearing:165,accuracy:11,live:true}];

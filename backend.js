@@ -1,0 +1,61 @@
+import{SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY}from"./config.js";
+
+const configured=Boolean(SUPABASE_URL&&SUPABASE_PUBLISHABLE_KEY);
+let client=null;
+
+async function getClient(){
+  if(!configured)return null;
+  if(client)return client;
+  const{createClient}=await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.74.0/+esm");
+  client=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  return client;
+}
+
+async function ensureUser(){
+  const supabase=await getClient();
+  if(!supabase)return null;
+  const{data:{session}}=await supabase.auth.getSession();
+  if(session?.user)return session.user;
+  const{data,error}=await supabase.auth.signInAnonymously();
+  if(error)throw error;
+  return data.user;
+}
+
+async function callRpc(name,args){
+  const supabase=await getClient();
+  if(!supabase)return null;
+  await ensureUser();
+  const{data,error}=await supabase.rpc(name,args);
+  if(error)throw error;
+  return data;
+}
+
+export const backend={
+  configured,
+  ensureUser,
+  async createGroup({name,nickname,expiresAt}){
+    return callRpc("create_wayv_group",{event_name:name,creator_nickname:nickname,expires_at:new Date(expiresAt).toISOString()});
+  },
+  async requestJoin({code,nickname}){
+    return callRpc("request_wayv_join",{invitation_code:code,nickname});
+  },
+  async approveMember(memberId){return callRpc("approve_wayv_member",{target_member_id:memberId});},
+  async rejectMember(memberId){return callRpc("reject_wayv_member",{target_member_id:memberId});},
+  async myActiveMembership(){return callRpc("get_my_wayv_membership",{});},
+  async pendingMembers(groupId){
+    const supabase=await getClient();if(!supabase)return[];
+    const{data,error}=await supabase.from("wayv_members").select("id,nickname,created_at").eq("group_id",groupId).eq("status","pending").order("created_at");
+    if(error)throw error;return data;
+  },
+  async updateLocation({groupId,latitude,longitude,accuracy,heading}){
+    const supabase=await getClient();if(!supabase)return;
+    const user=await ensureUser();
+    const{error}=await supabase.from("wayv_locations").upsert({group_id:groupId,user_id:user.id,latitude,longitude,accuracy,heading,updated_at:new Date().toISOString()},{onConflict:"group_id,user_id"});
+    if(error)throw error;
+  },
+  async subscribeToGroup(groupId,onChange){
+    const supabase=await getClient();if(!supabase)return()=>{};
+    const channel=supabase.channel(`wayv:${groupId}`).on("postgres_changes",{event:"*",schema:"public",table:"wayv_locations",filter:`group_id=eq.${groupId}`},onChange).on("postgres_changes",{event:"*",schema:"public",table:"wayv_members",filter:`group_id=eq.${groupId}`},onChange).subscribe();
+    return()=>supabase.removeChannel(channel);
+  }
+};
