@@ -16,6 +16,7 @@ h1{font-size:44px;text-align:center}
 .intro{max-width:310px;margin:12px auto 28px;color:var(--muted);font-size:14px;line-height:1.55;text-align:center}
 .stack,.form-stack{display:grid;gap:11px;margin-top:28px}
 .button{width:100%;min-height:48px;border:0;border-radius:14px;font-weight:850;cursor:pointer}
+.button:disabled{cursor:not-allowed;opacity:.45}
 .primary{background:var(--green);color:#07120c}
 .secondary{border:1px solid var(--line);background:var(--panel2);color:var(--text)}
 .route{margin-top:12px;border:1px solid rgba(56,146,255,.5);background:rgba(56,146,255,.13);color:#9bc7ff}
@@ -34,6 +35,7 @@ h1{font-size:44px;text-align:center}
 .topbar{display:flex;align-items:center;justify-content:space-between}
 .profile{width:42px;height:42px;border:0;border-radius:50%;background:var(--blue);color:white;font-weight:900}
 .members{display:flex;gap:8px;margin:17px 0 12px;overflow-x:auto;scrollbar-width:none}
+.members:empty::after{content:"Aún no hay otros integrantes aprobados";width:100%;padding:10px;color:var(--muted);font-size:12px;text-align:center}
 .chip{min-width:max-content;padding:8px 12px;border:1px solid var(--line);border-radius:99px;background:var(--panel2);color:var(--text);font-size:12px}
 .chip.selected{border-color:var(--blue);background:rgba(56,146,255,.14)}
 .chip.offline{color:#ff9aa3}

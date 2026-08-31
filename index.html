@@ -56,7 +56,6 @@
       <p class="eyebrow">SOLICITUD ENVIADA</p>
       <h2 id="waitingTitle">Esperando aprobación</h2>
       <p class="intro">La persona que creó el grupo debe aprobar tu entrada.</p>
-      <button id="demoApprove" class="button secondary">Simular aprobación</button>
     </section>
 
     <section id="groupView" class="view" aria-labelledby="groupTitle">
@@ -68,8 +67,8 @@
       <section class="radar" aria-label="Dirección hacia integrante seleccionado">
         <span class="north">N ↑</span>
         <div id="guideArrow" class="guide-arrow" aria-hidden="true">↑</div>
-        <div class="target"><strong id="targetInitials">KI</strong><span id="targetName">KIKI</span></div>
-        <div class="metrics"><strong id="distanceValue">74 m</strong><span id="accuracyValue">Precisión ±8 m</span></div>
+        <div class="target"><strong id="targetInitials">··</strong><span id="targetName">Sin seleccionar</span></div>
+        <div class="metrics"><strong id="distanceValue">—</strong><span id="accuracyValue">Esperando ubicación</span></div>
       </section>
       <div id="guidance" class="guidance hidden" aria-live="polite">
         <span id="guidanceIcon">↗</span><div><strong id="guidanceText">Camina hacia la derecha</strong><small id="guidanceDetail">Gira aproximadamente 42°</small></div>
@@ -79,9 +78,8 @@
         <div class="panel-title"><strong>Solicitudes de acceso</strong><button id="refreshPending" type="button">Actualizar</button></div>
         <div id="pendingList" class="pending-list"><small>No hay solicitudes pendientes</small></div>
       </section>
-      <button id="routeButton" class="button route">Trazar ruta hacia KIKI</button>
+      <button id="routeButton" class="button route" disabled>Selecciona a un integrante</button>
       <button id="meetButton" class="button meet">⌖ Reunirse aquí</button>
-      <details class="demo"><summary>Controles de demostración</summary><div class="demo-grid"><button data-turn="-30">Girar izquierda</button><button data-turn="30">Girar derecha</button><button id="toggleLive">Cambiar Live</button></div></details>
     </section>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

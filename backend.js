@@ -47,10 +47,28 @@ export const backend={
     const{data,error}=await supabase.from("wayv_members").select("id,nickname,created_at").eq("group_id",groupId).eq("status","pending").order("created_at");
     if(error)throw error;return data;
   },
+  async groupMembers(groupId){
+    const supabase=await getClient();if(!supabase)return[];
+    await ensureUser();
+    const{data,error}=await supabase.from("wayv_members").select("id,user_id,nickname,role,status,created_at").eq("group_id",groupId).eq("status","approved").order("created_at");
+    if(error)throw error;return data||[];
+  },
+  async groupLocations(groupId){
+    const supabase=await getClient();if(!supabase)return[];
+    await ensureUser();
+    const{data,error}=await supabase.from("wayv_locations").select("user_id,latitude,longitude,accuracy,heading,updated_at").eq("group_id",groupId);
+    if(error)throw error;return data||[];
+  },
   async updateLocation({groupId,latitude,longitude,accuracy,heading}){
     const supabase=await getClient();if(!supabase)return;
     const user=await ensureUser();
     const{error}=await supabase.from("wayv_locations").upsert({group_id:groupId,user_id:user.id,latitude,longitude,accuracy,heading,updated_at:new Date().toISOString()},{onConflict:"group_id,user_id"});
+    if(error)throw error;
+  },
+  async createMeetingPoint({groupId,latitude,longitude}){
+    const supabase=await getClient();if(!supabase)return;
+    const user=await ensureUser();
+    const{error}=await supabase.from("wayv_meeting_points").insert({group_id:groupId,creator_id:user.id,latitude,longitude});
     if(error)throw error;
   },
   async subscribeToGroup(groupId,onChange){
