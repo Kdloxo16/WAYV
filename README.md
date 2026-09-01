@@ -1,5 +1,9 @@
 # WAYV MVP
 
+## Actualización v10
+
+Antes de publicar esta versión, ejecuta `migration-v10.sql` una sola vez en Supabase > SQL Editor. Esta migración habilita el modo **Hazte visible** y los avisos en tiempo real. El archivo `migration-v9.sql` solo es necesario si todavía no habilitaste salir/eliminar grupos.
+
 Primera base modular de WAYV para ubicar amigos en festivales mediante dirección, distancia y precisión.
 
 ## Incluido

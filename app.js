@@ -1,6 +1,7 @@
 import{backend}from"./backend.js";
 const $=id=>document.getElementById(id);
-const state={route:false,heading:null,members:[],selected:null,ownUserId:null,ownLocation:null,toastTimer:null};
+const NEAR_METERS=30,COLORS=["#BDFF78","#3892FF","#FF6BCE","#FFB347"];
+const state={route:false,heading:null,members:[],selected:null,ownUserId:null,ownLocation:null,locationSamples:[],toastTimer:null};
 
 document.querySelectorAll("[data-go]").forEach(button=>button.addEventListener("click",()=>show(button.dataset.go)));
 $("createForm").addEventListener("submit",createGroup);
@@ -12,6 +13,8 @@ $("shareInvite").addEventListener("click",shareInvitation);
 $("copyInvite").addEventListener("click",copyInvitation);
 $("menuButton").addEventListener("click",()=>$("groupActions").classList.toggle("hidden"));
 $("leaveGroupButton").addEventListener("click",leaveCurrentGroup);
+$("findButton").addEventListener("click",sendVisibilitySignal);
+$("dismissMeeting").addEventListener("click",()=>$("meetingAlert").classList.add("hidden"));
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session?.group_id)loadGroupData();});
 
 initialize();
@@ -76,7 +79,7 @@ async function enterGroup(session){
   $("creatorPanel").classList.toggle("hidden",session.role!=="creator");$("groupActions").classList.add("hidden");$("sessionIdentity").textContent=`${session.nickname} · ${session.role==="creator"?"Creador":"Integrante"}`;$("leaveGroupButton").textContent=session.role==="creator"?"Eliminar grupo":"Salir del grupo";state.session=session;setupInvitation(session);show("groupView");renderMembers();renderEmptyTarget();
   if(session.role==="creator")loadPending();
   if(backend.configured&&session.group_id){
-    await loadGroupData();startRealtime(session.group_id);startLocationSharing(session.group_id);
+    await Promise.all([loadGroupData(),loadMeetingPoint(),loadVisibilitySignal()]);startRealtime(session.group_id);startLocationSharing(session.group_id);
     clearInterval(state.ageTimer);state.ageTimer=setInterval(()=>{renderMembers();renderSelected();},10000);
   }
 }
@@ -86,7 +89,7 @@ function startLocationSharing(groupId){
   if(state.locationWatch!==undefined)navigator.geolocation.clearWatch(state.locationWatch);
   state.locationWatch=navigator.geolocation.watchPosition(async position=>{
     const next={latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,heading:position.coords.heading,updatedAt:Date.now()};
-    state.ownLocation=smoothLocation(state.ownLocation,next);if(!state.ownLocation)return;
+    state.ownLocation=stabilizeLocation(next);$("signalHint").textContent=state.locationSamples.length<4?`Estabilizando GPS · ${state.locationSamples.length}/4 muestras`:gpsQuality(state.ownLocation.accuracy);if(state.locationSamples.length<4)return;
     if(Number.isFinite(position.coords.heading)&&state.heading===null)state.heading=position.coords.heading;renderSelected();
     if(document.hidden)return;const now=Date.now();if(now-(state.lastLocationSent||0)<5000)return;state.lastLocationSent=now;
     try{await backend.updateLocation({groupId,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude,accuracy:state.ownLocation.accuracy,heading:state.ownLocation.heading});}
@@ -116,7 +119,7 @@ async function reviewMember(id,approve){try{approve?await backend.approveMember(
 
 async function startRealtime(groupId){
   if(state.unsubscribe)state.unsubscribe();
-  state.unsubscribe=await backend.subscribeToGroup(groupId,()=>{clearTimeout(state.reloadTimer);state.reloadTimer=setTimeout(()=>{loadGroupData();if(state.session?.role==="creator")loadPending();},250);});
+  state.unsubscribe=await backend.subscribeToGroup(groupId,()=>{clearTimeout(state.reloadTimer);state.reloadTimer=setTimeout(()=>{loadGroupData();loadMeetingPoint(true);loadVisibilitySignal();if(state.session?.role==="creator")loadPending();},250);});
 }
 
 function renderMembers(){
@@ -128,21 +131,23 @@ function selectMember(userId){state.selected=userId;state.route=false;renderMemb
 
 function renderSelected(){
   const member=current();if(!member){renderEmptyTarget();return;}
-  $("targetInitials").textContent=member.initials;$("targetName").textContent=member.name;const hasLocations=Boolean(member.location&&state.ownLocation);const combined=hasLocations?combinedAccuracy(state.ownLocation,member.location):Infinity;const ready=hasLocations&&combined<=120;
+  $("targetInitials").textContent=member.initials;$("targetName").textContent=member.name;const hasLocations=Boolean(member.location&&state.ownLocation);const combined=hasLocations?combinedAccuracy(state.ownLocation,member.location):Infinity;
   if(hasLocations){member.distance=distanceMeters(state.ownLocation,member.location);member.bearing=bearingDegrees(state.ownLocation,member.location);$("distanceValue").textContent=distanceLabel(member.distance,combined);$("accuracyValue").textContent=combined>50?`Señal GPS baja · ±${Math.round(combined)} m`:`Precisión combinada ±${Math.round(combined)} m`;}
   else{$("distanceValue").textContent="—";$("accuracyValue").textContent=member.location?"Esperando tu ubicación":"Aún no comparte ubicación";}
-  $("routeButton").disabled=!ready;$("routeButton").textContent=state.route?"Detener indicaciones":ready?`Trazar ruta hacia ${member.name}`:hasLocations?"Esperando mejor señal GPS":"Ubicación todavía no disponible";$("routeButton").classList.toggle("active",state.route);$("guideArrow").classList.toggle("active",state.route);$("guidance").classList.toggle("hidden",!state.route);renderStatus(member);updateGuide();renderMap();
+  const veryNear=hasLocations&&(member.distance<=NEAR_METERS||member.distance<=combined);const ready=hasLocations&&combined<=120&&!veryNear;if(veryNear)state.route=false;
+  $("routeButton").disabled=!ready;$("routeButton").textContent=state.route?"Detener indicaciones":veryNear?"Ya está muy cerca":ready?`Trazar ruta hacia ${member.name}`:hasLocations?"Esperando mejor señal GPS":"Ubicación todavía no disponible";$("findButton").classList.toggle("hidden",!veryNear);$("findButton").textContent=`Pedir a ${member.name} que se haga visible`;$("routeButton").classList.toggle("active",state.route);$("guideArrow").classList.toggle("active",state.route);$("guidance").classList.toggle("hidden",!state.route);renderStatus(member);updateGuide();renderMap();
 }
 
 function renderEmptyTarget(){
-  $("targetInitials").textContent="··";$("targetName").textContent="Esperando amigos";$("distanceValue").textContent="—";$("accuracyValue").textContent="Sin ubicación disponible";$("routeButton").disabled=true;$("routeButton").textContent="Selecciona a un integrante";$("guideArrow").classList.remove("active");$("guidance").classList.add("hidden");$("liveLabel").textContent="Sin integrantes";document.querySelector(".live-dot").classList.add("offline");$("updatedLabel").textContent="Comparte el enlace privado para comenzar";renderMap();
+  $("targetInitials").textContent="··";$("targetName").textContent="Esperando amigos";$("distanceValue").textContent="—";$("accuracyValue").textContent="Sin ubicación disponible";$("routeButton").disabled=true;$("routeButton").textContent="Selecciona a un integrante";$("findButton").classList.add("hidden");$("guideArrow").classList.remove("active");$("guidance").classList.add("hidden");$("liveLabel").textContent="Sin integrantes";document.querySelector(".live-dot").classList.add("offline");$("updatedLabel").textContent="Comparte el enlace privado para comenzar";renderMap();
 }
 
 function renderMap(){
   if(!$("mapMarkers"))return;const located=state.members.filter(member=>member.location&&state.ownLocation);
   const measurements=located.map(member=>({member,distance:distanceMeters(state.ownLocation,member.location),bearing:bearingDegrees(state.ownLocation,member.location)}));
   const scale=Math.max(20,Math.min(1000,Math.max(0,...measurements.map(item=>item.distance))*1.15));
-  $("mapMarkers").innerHTML=measurements.map(({member,distance,bearing})=>{const radius=Math.min(42,distance/scale*42),angle=bearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;return`<button class="map-person ${member.user_id===state.selected?"selected":""} ${isLive(member.location)?"":"offline"}" data-map-member="${member.user_id}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>${member.initials}</b><span>${escapeHtml(member.name)}</span></button>`;}).join("");
+  $("mapMarkers").innerHTML=measurements.map(({member,distance,bearing},index)=>{const near=distance<=NEAR_METERS||distance<=combinedAccuracy(state.ownLocation,member.location),shownBearing=near?stableAngle(member.user_id):bearing,radius=near?15+(index%3)*6:Math.min(42,distance/scale*42),angle=shownBearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;return`<button class="map-person ${member.user_id===state.selected?"selected":""} ${isLive(member.location)?"":"offline"}" data-map-member="${member.user_id}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>${member.initials}</b><span>${escapeHtml(member.name)}</span></button>`;}).join("");
+  if(state.meetingPoint&&state.ownLocation){const distance=distanceMeters(state.ownLocation,state.meetingPoint),bearing=bearingDegrees(state.ownLocation,state.meetingPoint),radius=Math.min(42,distance/scale*42),angle=bearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;$("mapMarkers").insertAdjacentHTML("beforeend",`<div class="meeting-marker" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>⌖</b><span>REUNIÓN</span></div>`);}
   document.querySelectorAll("[data-map-member]").forEach(button=>button.onclick=()=>selectMember(button.dataset.mapMember));
 }
 
@@ -159,19 +164,25 @@ async function startOrientation(){
 function updateGuide(){
   const member=current();if(!member||!Number.isFinite(member.bearing))return;const heading=Number.isFinite(state.heading)?state.heading:state.ownLocation?.heading;
   if(!Number.isFinite(heading)){if(state.route)$("guidanceText").textContent="Mueve el teléfono para calibrar la brújula";return;}
-  const turn=difference(member.bearing,heading);$("guideArrow").style.transform=`rotate(${turn}deg)`;if(!state.route)return;const abs=Math.abs(turn);let text="Sigue recto",icon="↑";
-  if(abs>135){text="Vas en dirección equivocada · da la vuelta";icon="↶";if("vibrate"in navigator)navigator.vibrate([80,60,80]);}else if(abs>45){text=turn<0?"Camina hacia la izquierda":"Camina hacia la derecha";icon=turn<0?"←":"→";}else if(abs>15){text=turn<0?"Ve ligeramente a la izquierda":"Ve ligeramente a la derecha";icon=turn<0?"↖":"↗";}
-  $("guidanceText").textContent=text;$("guidanceIcon").textContent=icon;$("guidanceDetail").textContent=abs<=15?"Mantén esta dirección":`Gira aproximadamente ${Math.round(abs)}°`;
+  const turn=difference(member.bearing,heading);$("guideArrow").style.transform=`rotate(${turn}deg)`;if(!state.route)return;const abs=Math.abs(turn);let text="Sigue recto";
+  if(abs>135){text="Vas en dirección equivocada · da la vuelta";if("vibrate"in navigator)navigator.vibrate([80,60,80]);}else if(abs>45){text=turn<0?"Camina hacia la izquierda":"Camina hacia la derecha";}else if(abs>15){text=turn<0?"Ve ligeramente a la izquierda":"Ve ligeramente a la derecha";}
+  $("guidanceText").textContent=text;$("guidanceDetail").textContent=abs<=15?"Mantén esta dirección":`Gira aproximadamente ${Math.round(abs)}°`;
 }
 
-async function createMeetingPoint(){if(!state.ownLocation){toast("Esperando una ubicación precisa para crear el punto");return;}try{await backend.createMeetingPoint({groupId:state.session.group_id,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude});toast("Punto de encuentro compartido con el grupo");}catch(error){toast(friendlyError(error));}}
+async function createMeetingPoint(){if(!state.ownLocation){toast("Esperando una ubicación precisa para crear el punto");return;}try{state.meetingPoint=await backend.createMeetingPoint({groupId:state.session.group_id,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude});showMeetingPoint(false);renderMap();toast("Punto de encuentro compartido con el grupo");}catch(error){toast(friendlyError(error));}}
+async function loadMeetingPoint(notify=false){if(!state.session?.group_id)return;try{const point=await backend.latestMeetingPoint(state.session.group_id);if(!point||Date.now()-new Date(point.created_at).getTime()>7200000)return;const isNew=point.id!==state.meetingPoint?.id;state.meetingPoint=point;showMeetingPoint(notify&&isNew);renderMap();}catch{}}
+function showMeetingPoint(notify){const point=state.meetingPoint;if(!point)return;const creator=point.creator_id===state.ownUserId?"Tú":state.members.find(member=>member.user_id===point.creator_id)?.name||"Un integrante";$("meetingMessage").textContent=`${creator} marcó un punto · ${ageLabel(new Date(point.created_at).getTime())}`;$("meetingAlert").classList.remove("hidden");if(notify&&point.creator_id!==state.ownUserId){toast("Nuevo punto de encuentro");if("vibrate"in navigator)navigator.vibrate([120,80,120]);}}
+
+async function sendVisibilitySignal(){const member=current();if(!member)return;const color=COLORS[Math.abs(hashCode(state.ownUserId+member.user_id))%COLORS.length];try{await backend.sendVisibilitySignal({groupId:state.session.group_id,targetUserId:member.user_id,color});toast(`${member.name} recibió tu solicitud`);}catch(error){toast(friendlyError(error));}}
+async function loadVisibilitySignal(){if(!state.session?.group_id)return;try{const signal=await backend.latestVisibilitySignal(state.session.group_id);if(!signal||signal.id===state.lastSignalId)return;state.lastSignalId=signal.id;const sender=state.members.find(member=>member.user_id===signal.sender_id)?.name||"Un amigo";showVisibilityMode(sender,signal.color);}catch{}}
+function showVisibilityMode(sender,color){const overlay=document.createElement("section");overlay.className="visibility-mode";overlay.style.setProperty("--signal-color",color);overlay.innerHTML=`<div><small>${escapeHtml(sender)} TE ESTÁ BUSCANDO</small><strong>¡HAZTE VISIBLE!</strong><span>Levanta el teléfono para que pueda encontrarte.</span><button type="button">Ya me vio</button></div>`;overlay.querySelector("button").onclick=()=>overlay.remove();document.body.append(overlay);if("vibrate"in navigator)navigator.vibrate([150,80,150,80,300]);setTimeout(()=>overlay.remove(),120000);}
 
 async function leaveCurrentGroup(){
   const session=state.session;if(!session)return;const deleting=session.role==="creator";const confirmed=confirm(deleting?"¿Eliminar este grupo para todos? Esta acción no se puede deshacer.":"¿Salir de este grupo?");if(!confirmed)return;
   try{deleting?await backend.deleteGroup(session.group_id):await backend.leaveGroup(session.group_id);cleanupGroup();toast(deleting?"Grupo eliminado":"Saliste del grupo");show("homeView");}
   catch(error){toast(friendlyError(error));}
 }
-function cleanupGroup(){localStorage.removeItem("wayvSession");localStorage.removeItem("wayvPending");state.session=null;state.members=[];state.selected=null;state.ownLocation=null;if(state.locationWatch!==undefined){navigator.geolocation.clearWatch(state.locationWatch);state.locationWatch=undefined;}if(state.unsubscribe){state.unsubscribe();state.unsubscribe=null;}clearInterval(state.ageTimer);$("resumeHint").classList.add("hidden");$("groupActions").classList.add("hidden");}
+function cleanupGroup(){localStorage.removeItem("wayvSession");localStorage.removeItem("wayvPending");state.session=null;state.members=[];state.selected=null;state.ownLocation=null;state.locationSamples=[];state.meetingPoint=null;if(state.locationWatch!==undefined){navigator.geolocation.clearWatch(state.locationWatch);state.locationWatch=undefined;}if(state.unsubscribe){state.unsubscribe();state.unsubscribe=null;}clearInterval(state.ageTimer);$("resumeHint").classList.add("hidden");$("groupActions").classList.add("hidden");$("meetingAlert").classList.add("hidden");}
 
 function setupInvitation(session){
   const canInvite=session.role==="creator"&&Boolean(session.invite_code);$("invitePanel").classList.toggle("hidden",!canInvite);
@@ -192,8 +203,12 @@ function isLive(location){return Boolean(location&&Date.now()-location.updatedAt
 function ageLabel(timestamp){const seconds=Math.max(0,Math.floor((Date.now()-timestamp)/1000));if(seconds<60)return`hace ${seconds} s`;const minutes=Math.floor(seconds/60);if(minutes<60)return`hace ${minutes} min`;return`hace ${Math.floor(minutes/60)} h`;}
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join("").toUpperCase();}
 function combinedAccuracy(a,b){return Math.hypot(Number(a.accuracy)||0,Number(b.accuracy)||0);}
-function distanceLabel(distance,accuracy){if(distance<1&&accuracy<=5)return"< 1 m";if(distance<=Math.max(8,accuracy))return"Muy cerca";const rounded=Math.round(distance);return rounded<1000?`≈ ${rounded} m`:`≈ ${(rounded/1000).toFixed(1)} km`;}
-function smoothLocation(previous,next){if(!previous)return next;if(next.accuracy>Math.max(150,previous.accuracy*2.5)&&Date.now()-previous.updatedAt<30000)return previous;const alpha=Math.max(.12,Math.min(.55,previous.accuracy/(previous.accuracy+next.accuracy)));return{latitude:previous.latitude+(next.latitude-previous.latitude)*alpha,longitude:previous.longitude+(next.longitude-previous.longitude)*alpha,accuracy:Math.min(200,previous.accuracy*(1-alpha)+next.accuracy*alpha),heading:next.heading,updatedAt:next.updatedAt};}
+function distanceLabel(distance,accuracy){if(distance<=NEAR_METERS||distance<=accuracy)return"Muy cerca";const rounded=Math.round(distance);return rounded<1000?`≈ ${rounded} m`:`≈ ${(rounded/1000).toFixed(1)} km`;}
+function stabilizeLocation(next){state.locationSamples.push(next);state.locationSamples=state.locationSamples.filter(sample=>Date.now()-sample.updatedAt<30000).sort((a,b)=>a.accuracy-b.accuracy).slice(0,8);const usable=state.locationSamples.slice(0,5),lat=median(usable.map(sample=>sample.latitude)),lng=median(usable.map(sample=>sample.longitude)),accuracy=median(usable.map(sample=>sample.accuracy));return{latitude:lat,longitude:lng,accuracy,heading:next.heading,updatedAt:next.updatedAt};}
+function median(values){const sorted=[...values].sort((a,b)=>a-b),middle=Math.floor(sorted.length/2);return sorted.length%2?sorted[middle]:(sorted[middle-1]+sorted[middle])/2;}
+function gpsQuality(accuracy){return accuracy<=15?"GPS estable":accuracy<=40?"Precisión media":`Señal GPS baja · ±${Math.round(accuracy)} m`;}
+function hashCode(value){let hash=0;for(const character of String(value))hash=(hash*31+character.charCodeAt(0))|0;return hash;}
+function stableAngle(value){return Math.abs(hashCode(value))%360;}
 function smoothAngle(previous,next,alpha){if(!Number.isFinite(previous))return next;return normalize(previous+difference(next,previous)*alpha);}
 function distanceMeters(a,b){const radius=6371000,p1=a.latitude*Math.PI/180,p2=b.latitude*Math.PI/180,dp=(b.latitude-a.latitude)*Math.PI/180,dl=(b.longitude-a.longitude)*Math.PI/180,value=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return radius*2*Math.atan2(Math.sqrt(value),Math.sqrt(1-value));}
 function bearingDegrees(a,b){const p1=a.latitude*Math.PI/180,p2=b.latitude*Math.PI/180,dl=(b.longitude-a.longitude)*Math.PI/180;return normalize(Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*180/Math.PI);}

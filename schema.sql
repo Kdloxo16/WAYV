@@ -38,6 +38,12 @@ create table if not exists public.wayv_meeting_points(
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.wayv_signals(
+  id uuid primary key default gen_random_uuid(),group_id uuid not null references public.wayv_groups(id) on delete cascade,
+  sender_id uuid not null references auth.users(id) on delete cascade,target_user_id uuid not null references auth.users(id) on delete cascade,
+  kind text not null check(kind in('find_me')) default 'find_me',color text not null default '#BDFF78',created_at timestamptz not null default now(),expires_at timestamptz not null default(now()+interval '2 minutes')
+);
+
 create or replace function public.is_wayv_member(target_group uuid,target_user uuid default auth.uid()) returns boolean language sql stable security definer set search_path=public as $$
   select exists(select 1 from wayv_members where group_id=target_group and user_id=target_user and status='approved');
 $$;
@@ -46,6 +52,7 @@ create or replace function public.is_wayv_creator(target_group uuid,target_user 
 $$;
 
 alter table public.wayv_groups enable row level security;alter table public.wayv_members enable row level security;alter table public.wayv_locations enable row level security;alter table public.wayv_meeting_points enable row level security;
+alter table public.wayv_signals enable row level security;
 create policy "members read groups" on public.wayv_groups for select to authenticated using(creator_id=auth.uid() or public.is_wayv_member(id));
 create policy "members read memberships" on public.wayv_members for select to authenticated using(user_id=auth.uid() or public.is_wayv_member(group_id));
 create policy "members read locations" on public.wayv_locations for select to authenticated using(public.is_wayv_member(group_id));
@@ -53,6 +60,8 @@ create policy "users insert own location" on public.wayv_locations for insert to
 create policy "users update own location" on public.wayv_locations for update to authenticated using(user_id=auth.uid() and public.is_wayv_member(group_id)) with check(user_id=auth.uid());
 create policy "members read meeting points" on public.wayv_meeting_points for select to authenticated using(public.is_wayv_member(group_id));
 create policy "members create meeting points" on public.wayv_meeting_points for insert to authenticated with check(creator_id=auth.uid() and public.is_wayv_member(group_id));
+create policy "members read signals" on public.wayv_signals for select to authenticated using(public.is_wayv_member(group_id));
+create policy "members send signals" on public.wayv_signals for insert to authenticated with check(sender_id=auth.uid() and public.is_wayv_member(group_id));
 
 create or replace function public.create_wayv_group(event_name text,creator_nickname text,expires_at timestamptz) returns jsonb language plpgsql security definer set search_path=public as $$
 declare new_group wayv_groups; code text;
@@ -100,8 +109,11 @@ $$;
 grant execute on function public.create_wayv_group(text,text,timestamptz),public.request_wayv_join(text,text),public.approve_wayv_member(uuid),public.reject_wayv_member(uuid),public.leave_wayv_group(uuid),public.delete_wayv_group(uuid),public.get_my_wayv_membership() to authenticated;
 grant select on public.wayv_groups,public.wayv_members,public.wayv_locations,public.wayv_meeting_points to authenticated;
 grant insert,update on public.wayv_locations to authenticated;grant insert on public.wayv_meeting_points to authenticated;
+grant select,insert on public.wayv_signals to authenticated;
 
 do $$begin
   if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='wayv_locations') then alter publication supabase_realtime add table public.wayv_locations;end if;
   if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='wayv_members') then alter publication supabase_realtime add table public.wayv_members;end if;
+  if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='wayv_meeting_points') then alter publication supabase_realtime add table public.wayv_meeting_points;end if;
+  if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='wayv_signals') then alter publication supabase_realtime add table public.wayv_signals;end if;
 end$$;

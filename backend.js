@@ -70,12 +70,27 @@ export const backend={
   async createMeetingPoint({groupId,latitude,longitude}){
     const supabase=await getClient();if(!supabase)return;
     const user=await ensureUser();
-    const{error}=await supabase.from("wayv_meeting_points").insert({group_id:groupId,creator_id:user.id,latitude,longitude});
-    if(error)throw error;
+    const{data,error}=await supabase.from("wayv_meeting_points").insert({group_id:groupId,creator_id:user.id,latitude,longitude}).select("id,group_id,creator_id,latitude,longitude,created_at").single();
+    if(error)throw error;return data;
+  },
+  async latestMeetingPoint(groupId){
+    const supabase=await getClient();if(!supabase)return null;
+    const{data,error}=await supabase.from("wayv_meeting_points").select("id,creator_id,latitude,longitude,created_at").eq("group_id",groupId).order("created_at",{ascending:false}).limit(1).maybeSingle();
+    if(error)throw error;return data;
+  },
+  async sendVisibilitySignal({groupId,targetUserId,color}){
+    const supabase=await getClient();const user=await ensureUser();
+    const{data,error}=await supabase.from("wayv_signals").insert({group_id:groupId,sender_id:user.id,target_user_id:targetUserId,kind:"find_me",color,expires_at:new Date(Date.now()+120000).toISOString()}).select().single();
+    if(error)throw error;return data;
+  },
+  async latestVisibilitySignal(groupId){
+    const supabase=await getClient();const user=await ensureUser();
+    const{data,error}=await supabase.from("wayv_signals").select("id,sender_id,target_user_id,color,created_at,expires_at").eq("group_id",groupId).eq("target_user_id",user.id).gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}).limit(1).maybeSingle();
+    if(error)throw error;return data;
   },
   async subscribeToGroup(groupId,onChange){
     const supabase=await getClient();if(!supabase)return()=>{};
-    const channel=supabase.channel(`wayv:${groupId}`).on("postgres_changes",{event:"*",schema:"public",table:"wayv_locations",filter:`group_id=eq.${groupId}`},onChange).on("postgres_changes",{event:"*",schema:"public",table:"wayv_members",filter:`group_id=eq.${groupId}`},onChange).subscribe();
+    const channel=supabase.channel(`wayv:${groupId}`).on("postgres_changes",{event:"*",schema:"public",table:"wayv_locations",filter:`group_id=eq.${groupId}`},onChange).on("postgres_changes",{event:"*",schema:"public",table:"wayv_members",filter:`group_id=eq.${groupId}`},onChange).on("postgres_changes",{event:"INSERT",schema:"public",table:"wayv_meeting_points",filter:`group_id=eq.${groupId}`},onChange).on("postgres_changes",{event:"INSERT",schema:"public",table:"wayv_signals",filter:`group_id=eq.${groupId}`},onChange).subscribe();
     return()=>supabase.removeChannel(channel);
   }
 };

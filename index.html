@@ -79,12 +79,11 @@
         <div class="map-ring ring-one"></div><div class="map-ring ring-two"></div>
         <div id="mapMarkers" class="map-markers"></div>
         <div class="self-marker"><b>YO</b></div>
-        <div id="guideArrow" class="guide-arrow" aria-hidden="true">↑</div>
-        <div class="target"><strong id="targetInitials">··</strong><span id="targetName">Sin seleccionar</span></div>
-        <div class="metrics"><strong id="distanceValue">—</strong><span id="accuracyValue">Esperando ubicación</span></div>
       </section>
+      <section id="meetingAlert" class="meeting-alert hidden" aria-live="polite"><div><small>PUNTO DE ENCUENTRO</small><strong id="meetingMessage">Un integrante marcó una ubicación</strong></div><button id="dismissMeeting" type="button" aria-label="Cerrar aviso">×</button></section>
+      <div class="selected-summary"><div class="target"><strong id="targetInitials">··</strong><span id="targetName">Sin seleccionar</span></div><div class="metrics"><strong id="distanceValue">—</strong><span id="accuracyValue">Esperando ubicación</span></div></div>
       <div id="guidance" class="guidance hidden" aria-live="polite">
-        <span id="guidanceIcon">↗</span><div><strong id="guidanceText">Camina hacia la derecha</strong><small id="guidanceDetail">Gira aproximadamente 42°</small></div>
+        <div id="guideArrow" class="guide-arrow" aria-hidden="true">↑</div><div><strong id="guidanceText">Camina hacia la derecha</strong><small id="guidanceDetail">Gira aproximadamente 42°</small></div>
       </div>
       <div class="status-row"><span><b class="live-dot">●</b> <b id="liveLabel">Live</b><small id="updatedLabel">Actualizada ahora</small></span></div>
       <section id="creatorPanel" class="creator-panel hidden">
@@ -92,6 +91,7 @@
         <div id="pendingList" class="pending-list"><small>No hay solicitudes pendientes</small></div>
       </section>
       <button id="routeButton" class="button route" disabled>Selecciona a un integrante</button>
+      <button id="findButton" class="button find-near hidden">Hazte visible</button>
       <button id="meetButton" class="button meet">⌖ Reunirse aquí</button>
       <p id="signalHint" class="signal-hint">La precisión depende de la señal GPS de ambos teléfonos.</p>
     </section>
