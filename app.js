@@ -10,6 +10,8 @@ $("meetButton").addEventListener("click",createMeetingPoint);
 $("refreshPending").addEventListener("click",loadPending);
 $("shareInvite").addEventListener("click",shareInvitation);
 $("copyInvite").addEventListener("click",copyInvitation);
+$("menuButton").addEventListener("click",()=>$("groupActions").classList.toggle("hidden"));
+$("leaveGroupButton").addEventListener("click",leaveCurrentGroup);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session?.group_id)loadGroupData();});
 
 initialize();
@@ -19,7 +21,11 @@ async function initialize(){
     try{
       const user=await backend.ensureUser();state.ownUserId=user?.id||null;
       const membership=await backend.myActiveMembership();
-      if(membership?.status==="approved")localStorage.setItem("wayvSession",JSON.stringify({...membership,event:membership.name,expiresAt:new Date(membership.expires_at).getTime()}));
+      if(membership?.status==="approved"){
+        const session={...membership,event:membership.name,expiresAt:new Date(membership.expires_at).getTime()};localStorage.setItem("wayvSession",JSON.stringify(session));
+        const invite=new URLSearchParams(location.search).get("invite");if(invite){show("joinView");$("inviteCode").value=invite.toUpperCase();return;}
+        enterGroup(session);return;
+      }
       else if(membership?.status==="pending"){show("waitingView");watchApproval();return;}
     }catch(error){toast(`No se pudo conectar: ${friendlyError(error)}`);}
   }
@@ -67,7 +73,7 @@ function restoreSession(){
 
 async function enterGroup(session){
   $("eventEyebrow").textContent=session.event.toUpperCase();$("groupTitle").textContent="Mi grupo";$("menuButton").textContent=(session.nickname||"YO").slice(0,2).toUpperCase();
-  $("creatorPanel").classList.toggle("hidden",session.role!=="creator");state.session=session;setupInvitation(session);show("groupView");renderMembers();renderEmptyTarget();
+  $("creatorPanel").classList.toggle("hidden",session.role!=="creator");$("groupActions").classList.add("hidden");$("sessionIdentity").textContent=`${session.nickname} · ${session.role==="creator"?"Creador":"Integrante"}`;$("leaveGroupButton").textContent=session.role==="creator"?"Eliminar grupo":"Salir del grupo";state.session=session;setupInvitation(session);show("groupView");renderMembers();renderEmptyTarget();
   if(session.role==="creator")loadPending();
   if(backend.configured&&session.group_id){
     await loadGroupData();startRealtime(session.group_id);startLocationSharing(session.group_id);
@@ -79,7 +85,8 @@ function startLocationSharing(groupId){
   if(!navigator.geolocation){toast("Este dispositivo no permite obtener ubicación");return;}
   if(state.locationWatch!==undefined)navigator.geolocation.clearWatch(state.locationWatch);
   state.locationWatch=navigator.geolocation.watchPosition(async position=>{
-    state.ownLocation={latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,heading:position.coords.heading,updatedAt:Date.now()};
+    const next={latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,heading:position.coords.heading,updatedAt:Date.now()};
+    state.ownLocation=smoothLocation(state.ownLocation,next);if(!state.ownLocation)return;
     if(Number.isFinite(position.coords.heading)&&state.heading===null)state.heading=position.coords.heading;renderSelected();
     if(document.hidden)return;const now=Date.now();if(now-(state.lastLocationSent||0)<5000)return;state.lastLocationSent=now;
     try{await backend.updateLocation({groupId,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude,accuracy:state.ownLocation.accuracy,heading:state.ownLocation.heading});}
@@ -92,7 +99,7 @@ async function loadGroupData(){
   try{
     const[members,locations]=await Promise.all([backend.groupMembers(state.session.group_id),backend.groupLocations(state.session.group_id)]);const byUser=new Map(locations.map(location=>[location.user_id,location]));
     state.members=members.filter(member=>member.user_id!==state.ownUserId).map(member=>{const location=byUser.get(member.user_id);return{...member,name:member.nickname,initials:initials(member.nickname),location:location?{latitude:location.latitude,longitude:location.longitude,accuracy:location.accuracy,heading:location.heading,updatedAt:new Date(location.updated_at).getTime()}:null};});
-    if(!state.members.some(member=>member.user_id===state.selected))state.selected=state.members[0]?.user_id||null;renderMembers();renderSelected();
+    if(!state.members.some(member=>member.user_id===state.selected))state.selected=state.members[0]?.user_id||null;renderMembers();renderSelected();renderMap();
   }catch(error){toast(friendlyError(error));}
 }
 
@@ -117,18 +124,26 @@ function renderMembers(){
   document.querySelectorAll("[data-member]").forEach(button=>button.onclick=()=>selectMember(button.dataset.member));
 }
 
-function selectMember(userId){state.selected=userId;state.route=false;renderMembers();renderSelected();}
+function selectMember(userId){state.selected=userId;state.route=false;renderMembers();renderSelected();renderMap();}
 
 function renderSelected(){
   const member=current();if(!member){renderEmptyTarget();return;}
-  $("targetInitials").textContent=member.initials;$("targetName").textContent=member.name;const ready=Boolean(member.location&&state.ownLocation);
-  if(ready){member.distance=Math.round(distanceMeters(state.ownLocation,member.location));member.bearing=bearingDegrees(state.ownLocation,member.location);$("distanceValue").textContent=formatDistance(member.distance);$("accuracyValue").textContent=`Precisión ±${Math.round(member.location.accuracy)} m`;}
+  $("targetInitials").textContent=member.initials;$("targetName").textContent=member.name;const hasLocations=Boolean(member.location&&state.ownLocation);const combined=hasLocations?combinedAccuracy(state.ownLocation,member.location):Infinity;const ready=hasLocations&&combined<=120;
+  if(hasLocations){member.distance=distanceMeters(state.ownLocation,member.location);member.bearing=bearingDegrees(state.ownLocation,member.location);$("distanceValue").textContent=distanceLabel(member.distance,combined);$("accuracyValue").textContent=combined>50?`Señal GPS baja · ±${Math.round(combined)} m`:`Precisión combinada ±${Math.round(combined)} m`;}
   else{$("distanceValue").textContent="—";$("accuracyValue").textContent=member.location?"Esperando tu ubicación":"Aún no comparte ubicación";}
-  $("routeButton").disabled=!ready;$("routeButton").textContent=state.route?"Detener indicaciones":ready?`Trazar ruta hacia ${member.name}`:"Ubicación todavía no disponible";$("routeButton").classList.toggle("active",state.route);$("guideArrow").classList.toggle("active",state.route);$("guidance").classList.toggle("hidden",!state.route);renderStatus(member);updateGuide();
+  $("routeButton").disabled=!ready;$("routeButton").textContent=state.route?"Detener indicaciones":ready?`Trazar ruta hacia ${member.name}`:hasLocations?"Esperando mejor señal GPS":"Ubicación todavía no disponible";$("routeButton").classList.toggle("active",state.route);$("guideArrow").classList.toggle("active",state.route);$("guidance").classList.toggle("hidden",!state.route);renderStatus(member);updateGuide();renderMap();
 }
 
 function renderEmptyTarget(){
-  $("targetInitials").textContent="··";$("targetName").textContent="Esperando amigos";$("distanceValue").textContent="—";$("accuracyValue").textContent="Sin ubicación disponible";$("routeButton").disabled=true;$("routeButton").textContent="Selecciona a un integrante";$("guideArrow").classList.remove("active");$("guidance").classList.add("hidden");$("liveLabel").textContent="Sin integrantes";document.querySelector(".live-dot").classList.add("offline");$("updatedLabel").textContent="Comparte el enlace privado para comenzar";
+  $("targetInitials").textContent="··";$("targetName").textContent="Esperando amigos";$("distanceValue").textContent="—";$("accuracyValue").textContent="Sin ubicación disponible";$("routeButton").disabled=true;$("routeButton").textContent="Selecciona a un integrante";$("guideArrow").classList.remove("active");$("guidance").classList.add("hidden");$("liveLabel").textContent="Sin integrantes";document.querySelector(".live-dot").classList.add("offline");$("updatedLabel").textContent="Comparte el enlace privado para comenzar";renderMap();
+}
+
+function renderMap(){
+  if(!$("mapMarkers"))return;const located=state.members.filter(member=>member.location&&state.ownLocation);
+  const measurements=located.map(member=>({member,distance:distanceMeters(state.ownLocation,member.location),bearing:bearingDegrees(state.ownLocation,member.location)}));
+  const scale=Math.max(20,Math.min(1000,Math.max(0,...measurements.map(item=>item.distance))*1.15));
+  $("mapMarkers").innerHTML=measurements.map(({member,distance,bearing})=>{const radius=Math.min(42,distance/scale*42),angle=bearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;return`<button class="map-person ${member.user_id===state.selected?"selected":""} ${isLive(member.location)?"":"offline"}" data-map-member="${member.user_id}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>${member.initials}</b><span>${escapeHtml(member.name)}</span></button>`;}).join("");
+  document.querySelectorAll("[data-map-member]").forEach(button=>button.onclick=()=>selectMember(button.dataset.mapMember));
 }
 
 async function toggleRoute(){if(!current()?.location||!state.ownLocation)return;if(!state.orientationStarted)await startOrientation();state.route=!state.route;renderSelected();}
@@ -136,8 +151,8 @@ async function toggleRoute(){if(!current()?.location||!state.ownLocation)return;
 async function startOrientation(){
   try{
     if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){const permission=await DeviceOrientationEvent.requestPermission();if(permission!=="granted")throw new Error("Permiso de brújula rechazado");}
-    const handler=event=>{const heading=Number.isFinite(event.webkitCompassHeading)?event.webkitCompassHeading:Number.isFinite(event.alpha)?normalize(360-event.alpha):null;if(heading!==null){state.heading=heading;updateGuide();}};
-    window.addEventListener("deviceorientationabsolute",handler,true);window.addEventListener("deviceorientation",handler,true);state.orientationStarted=true;
+    const handler=event=>{const heading=Number.isFinite(event.webkitCompassHeading)?event.webkitCompassHeading:Number.isFinite(event.alpha)?normalize(360-event.alpha):null;if(heading!==null){state.heading=smoothAngle(state.heading,heading,.12);updateGuide();}};
+    window.addEventListener("deviceorientation",handler,true);state.orientationStarted=true;
   }catch(error){toast(error.message||"No pudimos activar la brújula");}
 }
 
@@ -150,6 +165,13 @@ function updateGuide(){
 }
 
 async function createMeetingPoint(){if(!state.ownLocation){toast("Esperando una ubicación precisa para crear el punto");return;}try{await backend.createMeetingPoint({groupId:state.session.group_id,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude});toast("Punto de encuentro compartido con el grupo");}catch(error){toast(friendlyError(error));}}
+
+async function leaveCurrentGroup(){
+  const session=state.session;if(!session)return;const deleting=session.role==="creator";const confirmed=confirm(deleting?"¿Eliminar este grupo para todos? Esta acción no se puede deshacer.":"¿Salir de este grupo?");if(!confirmed)return;
+  try{deleting?await backend.deleteGroup(session.group_id):await backend.leaveGroup(session.group_id);cleanupGroup();toast(deleting?"Grupo eliminado":"Saliste del grupo");show("homeView");}
+  catch(error){toast(friendlyError(error));}
+}
+function cleanupGroup(){localStorage.removeItem("wayvSession");localStorage.removeItem("wayvPending");state.session=null;state.members=[];state.selected=null;state.ownLocation=null;if(state.locationWatch!==undefined){navigator.geolocation.clearWatch(state.locationWatch);state.locationWatch=undefined;}if(state.unsubscribe){state.unsubscribe();state.unsubscribe=null;}clearInterval(state.ageTimer);$("resumeHint").classList.add("hidden");$("groupActions").classList.add("hidden");}
 
 function setupInvitation(session){
   const canInvite=session.role==="creator"&&Boolean(session.invite_code);$("invitePanel").classList.toggle("hidden",!canInvite);
@@ -169,7 +191,10 @@ function current(){return state.members.find(member=>member.user_id===state.sele
 function isLive(location){return Boolean(location&&Date.now()-location.updatedAt<30000);}
 function ageLabel(timestamp){const seconds=Math.max(0,Math.floor((Date.now()-timestamp)/1000));if(seconds<60)return`hace ${seconds} s`;const minutes=Math.floor(seconds/60);if(minutes<60)return`hace ${minutes} min`;return`hace ${Math.floor(minutes/60)} h`;}
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join("").toUpperCase();}
-function formatDistance(meters){return meters<1000?`${meters} m`:`${(meters/1000).toFixed(1)} km`;}
+function combinedAccuracy(a,b){return Math.hypot(Number(a.accuracy)||0,Number(b.accuracy)||0);}
+function distanceLabel(distance,accuracy){if(distance<1&&accuracy<=5)return"< 1 m";if(distance<=Math.max(8,accuracy))return"Muy cerca";const rounded=Math.round(distance);return rounded<1000?`≈ ${rounded} m`:`≈ ${(rounded/1000).toFixed(1)} km`;}
+function smoothLocation(previous,next){if(!previous)return next;if(next.accuracy>Math.max(150,previous.accuracy*2.5)&&Date.now()-previous.updatedAt<30000)return previous;const alpha=Math.max(.12,Math.min(.55,previous.accuracy/(previous.accuracy+next.accuracy)));return{latitude:previous.latitude+(next.latitude-previous.latitude)*alpha,longitude:previous.longitude+(next.longitude-previous.longitude)*alpha,accuracy:Math.min(200,previous.accuracy*(1-alpha)+next.accuracy*alpha),heading:next.heading,updatedAt:next.updatedAt};}
+function smoothAngle(previous,next,alpha){if(!Number.isFinite(previous))return next;return normalize(previous+difference(next,previous)*alpha);}
 function distanceMeters(a,b){const radius=6371000,p1=a.latitude*Math.PI/180,p2=b.latitude*Math.PI/180,dp=(b.latitude-a.latitude)*Math.PI/180,dl=(b.longitude-a.longitude)*Math.PI/180,value=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return radius*2*Math.atan2(Math.sqrt(value),Math.sqrt(1-value));}
 function bearingDegrees(a,b){const p1=a.latitude*Math.PI/180,p2=b.latitude*Math.PI/180,dl=(b.longitude-a.longitude)*Math.PI/180;return normalize(Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*180/Math.PI);}
 function expiry(){const value=Number($("durationValue").value);return Date.now()+value*($("durationUnit").value==="days"?86400000:3600000);}

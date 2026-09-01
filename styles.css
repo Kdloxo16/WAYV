@@ -34,6 +34,8 @@ h1{font-size:44px;text-align:center}
 }
 .topbar{display:flex;align-items:center;justify-content:space-between}
 .profile{width:42px;height:42px;border:0;border-radius:50%;background:var(--blue);color:white;font-weight:900}
+.group-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:11px;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.12)}
+.group-actions p{margin:0;color:var(--muted);font-size:11px}.group-actions button{min-height:36px;border:1px solid rgba(255,95,109,.45);border-radius:9px;background:rgba(255,95,109,.09);color:#ff9aa3;font-size:11px;font-weight:800}
 .invite-panel{display:grid;grid-template-columns:auto 1fr;gap:12px;margin-top:16px;padding:13px;border:1px solid rgba(189,255,120,.25);border-radius:14px;background:rgba(189,255,120,.07)}
 .invite-panel>div:first-child{display:grid;align-content:center;gap:3px}.invite-panel small{color:var(--muted);font-size:9px;letter-spacing:.1em}.invite-panel strong{color:var(--green);font-size:17px;letter-spacing:.08em}
 .invite-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.invite-actions button{min-height:39px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--text);font-size:10px;font-weight:800}
@@ -43,8 +45,11 @@ h1{font-size:44px;text-align:center}
 .chip.selected{border-color:var(--blue);background:rgba(56,146,255,.14)}
 .chip.offline{color:#ff9aa3}
 .radar{position:relative;height:330px;display:grid;place-items:center;overflow:hidden;border:1px solid var(--line);border-radius:24px;background:repeating-linear-gradient(0deg,transparent,transparent 29px,rgba(255,255,255,.035) 30px),repeating-linear-gradient(90deg,transparent,transparent 29px,rgba(255,255,255,.035) 30px),radial-gradient(circle,rgba(56,146,255,.15),transparent 48%),#303a47}
+.map-ring{position:absolute;left:50%;top:50%;border:1px solid rgba(255,255,255,.08);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}.ring-one{width:42%;aspect-ratio:1}.ring-two{width:78%;aspect-ratio:1}
+.map-markers{position:absolute;inset:0}.map-person{position:absolute;display:grid;justify-items:center;gap:3px;transform:translate(-50%,-50%);border:0;background:transparent;color:var(--text);z-index:3}.map-person b{display:grid;place-items:center;min-width:38px;height:38px;padding:0 8px;border:2px solid var(--blue);border-radius:50%;background:var(--panel2);font-size:11px}.map-person span{max-width:86px;padding:2px 5px;border-radius:6px;background:rgba(21,26,32,.82);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.map-person.selected b{border-color:var(--green);box-shadow:0 0 14px rgba(189,255,120,.35)}.map-person.offline{opacity:.55}
+.self-marker{position:absolute;left:50%;top:50%;display:grid;place-items:center;width:44px;height:44px;border:3px solid var(--green);border-radius:50%;background:#25303b;color:var(--green);transform:translate(-50%,-50%);z-index:4}.self-marker b{font-size:11px}
 .north{position:absolute;top:15px;left:17px;color:var(--muted);font-size:10px}
-.guide-arrow{color:var(--green);font-size:145px;line-height:1;filter:drop-shadow(0 0 13px rgba(189,255,120,.4));transition:transform .3s ease;opacity:.22}
+.guide-arrow{position:absolute;color:var(--green);font-size:145px;line-height:1;filter:drop-shadow(0 0 13px rgba(189,255,120,.4));transition:transform .5s ease;opacity:0;pointer-events:none;z-index:2}
 .guide-arrow.active{opacity:1}
 .target{position:absolute;top:34px;right:25px;display:grid;justify-items:center}
 .target strong{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:var(--green);color:#07120c}
@@ -52,6 +57,7 @@ h1{font-size:44px;text-align:center}
 .metrics{position:absolute;left:16px;bottom:14px;display:grid}
 .metrics strong{font-size:26px}
 .metrics span{color:var(--muted);font-size:11px}
+.signal-hint{margin:9px 4px 0;color:var(--muted);font-size:10px;text-align:center}
 .guidance{display:flex;align-items:center;gap:12px;margin-top:10px;padding:13px;border:1px solid rgba(189,255,120,.25);border-radius:14px;background:rgba(189,255,120,.08)}
 .guidance>span{color:var(--green);font-size:28px}
 .guidance strong,.guidance small{display:block}

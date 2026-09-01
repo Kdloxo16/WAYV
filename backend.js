@@ -41,6 +41,8 @@ export const backend={
   },
   async approveMember(memberId){return callRpc("approve_wayv_member",{target_member_id:memberId});},
   async rejectMember(memberId){return callRpc("reject_wayv_member",{target_member_id:memberId});},
+  async leaveGroup(groupId){return callRpc("leave_wayv_group",{target_group_id:groupId});},
+  async deleteGroup(groupId){return callRpc("delete_wayv_group",{target_group_id:groupId});},
   async myActiveMembership(){return callRpc("get_my_wayv_membership",{});},
   async pendingMembers(groupId){
     const supabase=await getClient();if(!supabase)return[];

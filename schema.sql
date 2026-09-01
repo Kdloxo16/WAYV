@@ -80,12 +80,24 @@ begin update wayv_members set status='approved' where id=target_member_id and pu
 create or replace function public.reject_wayv_member(target_member_id uuid) returns void language plpgsql security definer set search_path=public as $$
 begin update wayv_members set status='rejected' where id=target_member_id and public.is_wayv_creator(group_id);if not found then raise exception 'Not authorized';end if;end;$$;
 
+create or replace function public.leave_wayv_group(target_group_id uuid) returns void language plpgsql security definer set search_path=public as $$
+begin
+  delete from wayv_members where group_id=target_group_id and user_id=auth.uid() and role<>'creator';
+  if not found then raise exception 'Creator must delete the group';end if;
+end;$$;
+
+create or replace function public.delete_wayv_group(target_group_id uuid) returns void language plpgsql security definer set search_path=public as $$
+begin
+  delete from wayv_groups where id=target_group_id and creator_id=auth.uid();
+  if not found then raise exception 'Not authorized';end if;
+end;$$;
+
 create or replace function public.get_my_wayv_membership() returns jsonb language sql stable security definer set search_path=public as $$
   select jsonb_build_object('group_id',g.id,'name',g.name,'invite_code',case when g.creator_id=auth.uid() then g.invite_code else null end,'expires_at',g.expires_at,'role',m.role,'status',m.status,'nickname',m.nickname)
   from wayv_members m join wayv_groups g on g.id=m.group_id where m.user_id=auth.uid() and g.expires_at>now() order by m.created_at desc limit 1;
 $$;
 
-grant execute on function public.create_wayv_group(text,text,timestamptz),public.request_wayv_join(text,text),public.approve_wayv_member(uuid),public.reject_wayv_member(uuid),public.get_my_wayv_membership() to authenticated;
+grant execute on function public.create_wayv_group(text,text,timestamptz),public.request_wayv_join(text,text),public.approve_wayv_member(uuid),public.reject_wayv_member(uuid),public.leave_wayv_group(uuid),public.delete_wayv_group(uuid),public.get_my_wayv_membership() to authenticated;
 grant select on public.wayv_groups,public.wayv_members,public.wayv_locations,public.wayv_meeting_points to authenticated;
 grant insert,update on public.wayv_locations to authenticated;grant insert on public.wayv_meeting_points to authenticated;
 

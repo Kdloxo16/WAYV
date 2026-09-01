@@ -62,6 +62,10 @@
         <div><p id="eventEyebrow" class="eyebrow">EVENTO</p><h2 id="groupTitle">Mi grupo</h2></div>
         <button id="menuButton" class="profile" aria-label="Opciones del grupo">KE</button>
       </header>
+      <section id="groupActions" class="group-actions hidden">
+        <p id="sessionIdentity">Sesión activa</p>
+        <button id="leaveGroupButton" type="button">Salir del grupo</button>
+      </section>
       <section id="invitePanel" class="invite-panel hidden" aria-label="Invitación privada">
         <div><small>CÓDIGO PRIVADO</small><strong id="groupInviteCode">—</strong></div>
         <div class="invite-actions">
@@ -70,8 +74,11 @@
         </div>
       </section>
       <div id="memberChips" class="members" aria-label="Integrantes"></div>
-      <section class="radar" aria-label="Dirección hacia integrante seleccionado">
+      <section id="groupMap" class="radar" aria-label="Plano relativo del grupo">
         <span class="north">N ↑</span>
+        <div class="map-ring ring-one"></div><div class="map-ring ring-two"></div>
+        <div id="mapMarkers" class="map-markers"></div>
+        <div class="self-marker"><b>YO</b></div>
         <div id="guideArrow" class="guide-arrow" aria-hidden="true">↑</div>
         <div class="target"><strong id="targetInitials">··</strong><span id="targetName">Sin seleccionar</span></div>
         <div class="metrics"><strong id="distanceValue">—</strong><span id="accuracyValue">Esperando ubicación</span></div>
@@ -86,6 +93,7 @@
       </section>
       <button id="routeButton" class="button route" disabled>Selecciona a un integrante</button>
       <button id="meetButton" class="button meet">⌖ Reunirse aquí</button>
+      <p id="signalHint" class="signal-hint">La precisión depende de la señal GPS de ambos teléfonos.</p>
     </section>
   </main>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
