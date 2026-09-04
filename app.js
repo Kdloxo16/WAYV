@@ -1,7 +1,7 @@
 import{backend}from"./backend.js";
 const $=id=>document.getElementById(id);
-const NEAR_METERS=30,COLORS=["#BDFF78","#3892FF","#FF6BCE","#FFB347"];
-const state={route:false,heading:null,members:[],selected:null,ownUserId:null,ownLocation:null,locationSamples:[],toastTimer:null};
+const NEAR_METERS=20,MAX_SHARED_ACCURACY=75,COLORS=["#BDFF78","#3892FF","#FF6BCE","#FFB347"];
+const state={route:false,heading:null,members:[],selected:null,ownUserId:null,ownLocation:null,locationSamples:[],rejectedLocations:0,toastTimer:null};
 
 document.querySelectorAll("[data-go]").forEach(button=>button.addEventListener("click",()=>show(button.dataset.go)));
 $("createForm").addEventListener("submit",createGroup);
@@ -14,6 +14,7 @@ $("copyInvite").addEventListener("click",copyInvitation);
 $("menuButton").addEventListener("click",()=>$("groupActions").classList.toggle("hidden"));
 $("leaveGroupButton").addEventListener("click",leaveCurrentGroup);
 $("findButton").addEventListener("click",sendVisibilitySignal);
+$("recalibrateGps").addEventListener("click",recalibrateGps);
 $("dismissMeeting").addEventListener("click",()=>$("meetingAlert").classList.add("hidden"));
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&state.session?.group_id)loadGroupData();});
 
@@ -26,7 +27,6 @@ async function initialize(){
       const membership=await backend.myActiveMembership();
       if(membership?.status==="approved"){
         const session={...membership,event:membership.name,expiresAt:new Date(membership.expires_at).getTime()};localStorage.setItem("wayvSession",JSON.stringify(session));
-        const invite=new URLSearchParams(location.search).get("invite");if(invite){show("joinView");$("inviteCode").value=invite.toUpperCase();return;}
         enterGroup(session);return;
       }
       else if(membership?.status==="pending"){show("waitingView");watchApproval();return;}
@@ -89,13 +89,18 @@ function startLocationSharing(groupId){
   if(state.locationWatch!==undefined)navigator.geolocation.clearWatch(state.locationWatch);
   state.locationWatch=navigator.geolocation.watchPosition(async position=>{
     const next={latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,heading:position.coords.heading,updatedAt:Date.now()};
-    state.ownLocation=stabilizeLocation(next);$("signalHint").textContent=state.locationSamples.length<4?`Estabilizando GPS · ${state.locationSamples.length}/4 muestras`:gpsQuality(state.ownLocation.accuracy);if(state.locationSamples.length<4)return;
+    const stabilized=stabilizeLocation(next);
+    if(!stabilized){$("signalHint").textContent=state.rejectedLocations?"Descartando un salto impreciso del GPS":"Buscando una señal GPS válida";return;}
+    state.ownLocation=stabilized;$("signalHint").textContent=state.locationSamples.length<4?`Estabilizando GPS · ${state.locationSamples.length}/4 muestras`:gpsQuality(state.ownLocation.accuracy);if(state.locationSamples.length<4)return;
     if(Number.isFinite(position.coords.heading)&&state.heading===null)state.heading=position.coords.heading;renderSelected();
+    if(state.ownLocation.accuracy>MAX_SHARED_ACCURACY){$("signalHint").textContent=`GPS deficiente · ±${Math.round(state.ownLocation.accuracy)} m · recalibra`;return;}
     if(document.hidden)return;const now=Date.now();if(now-(state.lastLocationSent||0)<5000)return;state.lastLocationSent=now;
     try{await backend.updateLocation({groupId,latitude:state.ownLocation.latitude,longitude:state.ownLocation.longitude,accuracy:state.ownLocation.accuracy,heading:state.ownLocation.heading});}
     catch(error){toast(friendlyError(error));}
-  },error=>toast(error.code===1?"Activa el permiso de ubicación para usar WAYV":"No pudimos obtener tu ubicación"),{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
+  },error=>toast(error.code===1?"Activa el permiso de ubicación para usar WAYV":"No pudimos obtener tu ubicación"),{enableHighAccuracy:true,maximumAge:0,timeout:20000});
 }
+
+function recalibrateGps(){state.locationSamples=[];state.rejectedLocations=0;state.ownLocation=null;state.lastLocationSent=0;$("signalHint").textContent="Recalibrando GPS · mantén WAYV abierta";renderSelected();if(state.session?.group_id)startLocationSharing(state.session.group_id);toast("Recalibrando ubicación");}
 
 async function loadGroupData(){
   if(!state.session?.group_id)return;
@@ -134,8 +139,8 @@ function renderSelected(){
   $("targetInitials").textContent=member.initials;$("targetName").textContent=member.name;const hasLocations=Boolean(member.location&&state.ownLocation);const combined=hasLocations?combinedAccuracy(state.ownLocation,member.location):Infinity;
   if(hasLocations){member.distance=distanceMeters(state.ownLocation,member.location);member.bearing=bearingDegrees(state.ownLocation,member.location);$("distanceValue").textContent=distanceLabel(member.distance,combined);$("accuracyValue").textContent=combined>50?`Señal GPS baja · ±${Math.round(combined)} m`:`Precisión combinada ±${Math.round(combined)} m`;}
   else{$("distanceValue").textContent="—";$("accuracyValue").textContent=member.location?"Esperando tu ubicación":"Aún no comparte ubicación";}
-  const veryNear=hasLocations&&(member.distance<=NEAR_METERS||member.distance<=combined);const ready=hasLocations&&combined<=120&&!veryNear;if(veryNear)state.route=false;
-  $("routeButton").disabled=!ready;$("routeButton").textContent=state.route?"Detener indicaciones":veryNear?"Ya está muy cerca":ready?`Trazar ruta hacia ${member.name}`:hasLocations?"Esperando mejor señal GPS":"Ubicación todavía no disponible";$("findButton").classList.toggle("hidden",!veryNear);$("findButton").textContent=`Pedir a ${member.name} que se haga visible`;$("routeButton").classList.toggle("active",state.route);$("guideArrow").classList.toggle("active",state.route);$("guidance").classList.toggle("hidden",!state.route);renderStatus(member);updateGuide();renderMap();
+  const veryNear=hasLocations&&member.distance<=Math.max(NEAR_METERS,combined*1.15),directionReliable=hasLocations&&member.distance>Math.max(NEAR_METERS,combined*1.5),ready=hasLocations&&combined<=50&&directionReliable&&!veryNear;if(!ready)state.route=false;
+  $("routeButton").disabled=!ready;$("routeButton").textContent=state.route?"Detener indicaciones":veryNear?"Ya está muy cerca":ready?`Trazar ruta hacia ${member.name}`:hasLocations&&combined>50?"Esperando mejor señal GPS":hasLocations?"Dirección inestable · está muy cerca":"Ubicación todavía no disponible";$("findButton").classList.toggle("hidden",!veryNear);$("findButton").textContent=`Pedir a ${member.name} que se haga visible`;$("routeButton").classList.toggle("active",state.route);$("guideArrow").classList.toggle("active",state.route);$("guidance").classList.toggle("hidden",!state.route);renderStatus(member);updateGuide();renderMap();
 }
 
 function renderEmptyTarget(){
@@ -146,7 +151,7 @@ function renderMap(){
   if(!$("mapMarkers"))return;const located=state.members.filter(member=>member.location&&state.ownLocation);
   const measurements=located.map(member=>({member,distance:distanceMeters(state.ownLocation,member.location),bearing:bearingDegrees(state.ownLocation,member.location)}));
   const scale=Math.max(20,Math.min(1000,Math.max(0,...measurements.map(item=>item.distance))*1.15));
-  $("mapMarkers").innerHTML=measurements.map(({member,distance,bearing},index)=>{const near=distance<=NEAR_METERS||distance<=combinedAccuracy(state.ownLocation,member.location),shownBearing=near?stableAngle(member.user_id):bearing,radius=near?15+(index%3)*6:Math.min(42,distance/scale*42),angle=shownBearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;return`<button class="map-person ${member.user_id===state.selected?"selected":""} ${isLive(member.location)?"":"offline"}" data-map-member="${member.user_id}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>${member.initials}</b><span>${escapeHtml(member.name)}</span></button>`;}).join("");
+  $("mapMarkers").innerHTML=measurements.map(({member,distance,bearing},index)=>{const near=distance<=Math.max(NEAR_METERS,combinedAccuracy(state.ownLocation,member.location)*1.15),shownBearing=near?stableAngle(member.user_id):bearing,radius=near?15+(index%3)*6:Math.min(42,distance/scale*42),angle=shownBearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;return`<button class="map-person ${member.user_id===state.selected?"selected":""} ${isLive(member.location)?"":"offline"}" data-map-member="${member.user_id}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>${member.initials}</b><span>${escapeHtml(member.name)}</span></button>`;}).join("");
   if(state.meetingPoint&&state.ownLocation){const distance=distanceMeters(state.ownLocation,state.meetingPoint),bearing=bearingDegrees(state.ownLocation,state.meetingPoint),radius=Math.min(42,distance/scale*42),angle=bearing*Math.PI/180,left=50+Math.sin(angle)*radius,top=50-Math.cos(angle)*radius;$("mapMarkers").insertAdjacentHTML("beforeend",`<div class="meeting-marker" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"><b>⌖</b><span>REUNIÓN</span></div>`);}
   document.querySelectorAll("[data-map-member]").forEach(button=>button.onclick=()=>selectMember(button.dataset.mapMember));
 }
@@ -204,9 +209,16 @@ function ageLabel(timestamp){const seconds=Math.max(0,Math.floor((Date.now()-tim
 function initials(name){return name.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join("").toUpperCase();}
 function combinedAccuracy(a,b){return Math.hypot(Number(a.accuracy)||0,Number(b.accuracy)||0);}
 function distanceLabel(distance,accuracy){if(distance<=NEAR_METERS||distance<=accuracy)return"Muy cerca";const rounded=Math.round(distance);return rounded<1000?`≈ ${rounded} m`:`≈ ${(rounded/1000).toFixed(1)} km`;}
-function stabilizeLocation(next){state.locationSamples.push(next);state.locationSamples=state.locationSamples.filter(sample=>Date.now()-sample.updatedAt<30000).sort((a,b)=>a.accuracy-b.accuracy).slice(0,8);const usable=state.locationSamples.slice(0,5),lat=median(usable.map(sample=>sample.latitude)),lng=median(usable.map(sample=>sample.longitude)),accuracy=median(usable.map(sample=>sample.accuracy));return{latitude:lat,longitude:lng,accuracy,heading:next.heading,updatedAt:next.updatedAt};}
+function stabilizeLocation(next){
+  if(!Number.isFinite(next.latitude)||!Number.isFinite(next.longitude)||!Number.isFinite(next.accuracy)||next.accuracy<=0||next.accuracy>150)return null;
+  const previous=state.ownLocation;
+  if(previous){const elapsed=Math.max(.5,(next.updatedAt-previous.updatedAt)/1000),jump=distanceMeters(previous,next),uncertainty=Math.hypot(previous.accuracy,next.accuracy),maximumJump=Math.max(20,uncertainty*1.35+elapsed*4.5);if(jump>maximumJump&&next.accuracy>=previous.accuracy*.7){state.rejectedLocations+=1;return null;}}
+  state.rejectedLocations=0;state.locationSamples.push(next);const windowMs=state.route?6000:12000,now=next.updatedAt;state.locationSamples=state.locationSamples.filter(sample=>now-sample.updatedAt<=windowMs).slice(-8);
+  let total=0,latitude=0,longitude=0;for(const sample of state.locationSamples){const recency=Math.exp(-(now-sample.updatedAt)/4000),weight=recency/Math.max(9,sample.accuracy**2);total+=weight;latitude+=sample.latitude*weight;longitude+=sample.longitude*weight;}
+  const accuracy=median(state.locationSamples.map(sample=>sample.accuracy));return{latitude:latitude/total,longitude:longitude/total,accuracy,heading:next.heading,updatedAt:next.updatedAt};
+}
 function median(values){const sorted=[...values].sort((a,b)=>a-b),middle=Math.floor(sorted.length/2);return sorted.length%2?sorted[middle]:(sorted[middle-1]+sorted[middle])/2;}
-function gpsQuality(accuracy){return accuracy<=15?"GPS estable":accuracy<=40?"Precisión media":`Señal GPS baja · ±${Math.round(accuracy)} m`;}
+function gpsQuality(accuracy){return accuracy<=8?`GPS excelente · ±${Math.round(accuracy)} m`:accuracy<=20?`GPS aceptable · ±${Math.round(accuracy)} m`:accuracy<=MAX_SHARED_ACCURACY?`GPS limitado · ±${Math.round(accuracy)} m`:`GPS deficiente · ±${Math.round(accuracy)} m`;}
 function hashCode(value){let hash=0;for(const character of String(value))hash=(hash*31+character.charCodeAt(0))|0;return hash;}
 function stableAngle(value){return Math.abs(hashCode(value))%360;}
 function smoothAngle(previous,next,alpha){if(!Number.isFinite(previous))return next;return normalize(previous+difference(next,previous)*alpha);}

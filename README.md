@@ -1,8 +1,8 @@
 # WAYV MVP
 
-## Actualización v10
+## Actualización v12
 
-Antes de publicar esta versión, ejecuta `migration-v10.sql` una sola vez en Supabase > SQL Editor. Esta migración habilita el modo **Hazte visible** y los avisos en tiempo real. El archivo `migration-v9.sql` solo es necesario si todavía no habilitaste salir/eliminar grupos.
+Esta versión incorpora GPS adaptativo: elimina coordenadas en caché, descarta saltos imposibles, pondera las muestras recientes por precisión, impide mostrar rutas cuando la dirección no es confiable y permite recalibrar el GPS manualmente. No requiere una migración nueva. Debes conservar `migration-v11.sql` aplicada para evitar que un integrante aprobado vuelva a quedar pendiente.
 
 Primera base modular de WAYV para ubicar amigos en festivales mediante dirección, distancia y precisión.
 
